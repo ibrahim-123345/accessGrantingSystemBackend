@@ -1,14 +1,10 @@
 const { AccessType } = require("../models/accessTypes");
 
-// Helper: standardized API response
 const sendResponse = (res, status, success, message, data = null) => {
   return res.status(status).json({ success, message, data });
 };
 
-/**
- * Create a new Access Type
- * Supports boolean action flags: canRead, canInsert, canUpdate, canDelete
- */
+
 const createAccessType = async (req, res) => {
   try {
     const {
@@ -23,12 +19,10 @@ const createAccessType = async (req, res) => {
       canDelete,
     } = req.body;
 
-    // Validate required fields
     if (!typeName) {
       return sendResponse(res, 400, false, "Access type name is required");
     }
 
-    // Check for duplicates
     const existingAccessType = await AccessType.findOne({ typeName });
     if (existingAccessType) {
       return sendResponse(res, 409, false, "Access type name already exists");
@@ -54,9 +48,7 @@ const createAccessType = async (req, res) => {
   }
 };
 
-/**
- * Fetch all Access Types
- */
+
 const getAllAccessTypes = async (req, res) => {
   try {
     const accessTypes = await AccessType.find();
@@ -67,9 +59,8 @@ const getAllAccessTypes = async (req, res) => {
   }
 };
 
-/**
- * Fetch a single Access Type by ID
- */
+
+
 const getAccessTypeById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -84,10 +75,9 @@ const getAccessTypeById = async (req, res) => {
   }
 };
 
-/**
- * Update an existing Access Type
- * Supports partial updates including boolean action flags
- */
+
+
+
 const updateAccessType = async (req, res) => {
   try {
     const { id } = req.params;
@@ -109,7 +99,6 @@ const updateAccessType = async (req, res) => {
       return sendResponse(res, 404, false, "Access type not found");
     }
 
-    // Check for duplicate typeName if updated
     if (typeName && typeName !== accessType.typeName) {
       const existingAccessType = await AccessType.findOne({ typeName });
       if (existingAccessType) {
@@ -117,7 +106,6 @@ const updateAccessType = async (req, res) => {
       }
     }
 
-    // Update fields if provided
     if (typeName) accessType.typeName = typeName;
     if (description) accessType.description = description;
     if (requiresJustification !== undefined) accessType.requiresJustification = requiresJustification;
@@ -125,7 +113,6 @@ const updateAccessType = async (req, res) => {
     if (riskLevel) accessType.riskLevel = riskLevel;
     if (isActive !== undefined) accessType.isActive = isActive;
 
-    // Update boolean action flags
     if (canRead !== undefined) accessType.canRead = canRead;
     if (canInsert !== undefined) accessType.canInsert = canInsert;
     if (canUpdate !== undefined) accessType.canUpdate = canUpdate;
@@ -139,9 +126,7 @@ const updateAccessType = async (req, res) => {
   }
 };
 
-/**
- * Delete an Access Type permanently
- */
+
 const deleteAccessType = async (req, res) => {
   try {
     const { id } = req.params;

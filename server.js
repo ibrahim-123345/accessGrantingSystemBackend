@@ -9,9 +9,10 @@ const{createDepartment,deleteDepartment,getDepartmentById,getAllDepartments,upda
 const{createSystemsPlatform,getAllSystemsPlatforms,deleteSystemsPlatform,getSystemsPlatformById,updateSystemsPlatform}=require('./controllers/systemsPlatform');
 const{getAccessTypeById,createAccessType,deleteAccessType,getAllAccessTypes,updateAccessType}=require('./controllers/accessTypes');
 const{getAllEmployees,getEmployeeById,createEmployee,updateEmployee,deleteEmployee}=require('./controllers/employee');
-const{createAccessRequest,getAllAccessRequests,getAccessRequestById,updateAccessRequest,deleteAccessRequest}=require('./controllers/accessRequest');
+const{createAccessRequest,getAllAccessRequests,getAccessRequestById,updateAccessRequest,deleteAccessRequest,supervisorApproval,itApproval}=require('./controllers/accessRequest');
 const{createNotification,deleteNotification,getAllNotifications,getNotificationById,markAsRead}=require('./controllers/notification');
 const{login, createUser}=require('./controllers/authentication')
+
 
 
 const PORT = process.env.PORT || 5000
@@ -70,6 +71,8 @@ app.get('/api/accessRequests', getAllAccessRequests)
 app.get('/api/accessRequests/:id', getAccessRequestById)
 app.put('/api/accessRequests/:id', updateAccessRequest)
 app.delete('/api/accessRequests/:id', deleteAccessRequest)
+app.post('/api/accessRequests/:id/', supervisorApproval)
+app.post('/api/accessRequests/:id/itApproval', itApproval)
 
 
 //notification routes

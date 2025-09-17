@@ -56,18 +56,15 @@ const createEmployee = async (req, res) => {
       hireDate,
     } = req.body;
 
-    // Basic validation
     if (!fullName || !email || !employeeId || !departmentId) {
       return sendResponse(res, 400, false, "Missing required fields");
     }
 
-    // Check if department exists
     const departmentExists = await Department.findById(departmentId);
     if (!departmentExists) {
       return sendResponse(res, 400, false, "Invalid departmentId: department does not exist");
     }
 
-    // Check for existing email or employeeId
     const existingEmployee = await Employee.findOne({
       $or: [{ email }, { employeeId }],
     });
@@ -75,7 +72,6 @@ const createEmployee = async (req, res) => {
       return sendResponse(res, 409, false, "Email or Employee ID already exists");
     }
 
-    // Prepare new employee object
     const newEmployeeData = {
       fullName,
       email,
@@ -91,7 +87,6 @@ const createEmployee = async (req, res) => {
       hireDate,
     };
 
-    // Only include supervisor if supervisorId is provided
     if (supervisorId) {
       const supervisor = await Employee.findById(supervisorId);
       if (!supervisor) {
@@ -115,7 +110,6 @@ const createEmployee = async (req, res) => {
   }
 };
 
-// Update Employee
 const updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;

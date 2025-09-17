@@ -7,12 +7,22 @@ const notificationSchema = new mongoose.Schema({
     fullName: { type: String },
     email: { type: String }
   },
+  senderId: { 
+    type: mongoose.Schema.Types.ObjectId, ref: "Employee",
+    default: null},
+
+  sender: {
+    fullName: { type: String },
+    email: { type: String }
+  },
 
   // Notification Details
   type: { 
     type: String, 
-    enum: ["request_submitted", "approval_needed", "access_granted", "expiry_warning", "access_expired", "access_revoked"], 
-    required: true 
+  enum: [
+      "pending","supervisor_approved","it_approved",
+      "approved","rejected","active","expired","revoked"
+    ],     required: true 
   },
   priority: {
     type: String, enum: ["low", "medium", "high", "urgent"], default: "medium"
@@ -44,6 +54,16 @@ const notificationSchema = new mongoose.Schema({
 
 
 }, { timestamps: true }); 
+
+
+notificationSchema.pre(/^find/, function(next) {
+  this.populate({
+    path: "senderId recipientId",
+    select: "fullName email" 
+  });
+  next();
+});
+
 
 const Notification = mongoose.model("Notification", notificationSchema);
 

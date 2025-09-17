@@ -29,34 +29,30 @@ const accessRequestSchema = new mongoose.Schema({
   requestedEndDate: { type: Date, default: null },
 
 
-  supervisorApprovals: [
-    {
-      approverId: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", default: null },
-      role: { type: String, enum: ["supervisor","department_head","HR","IT"], default: null },
-      decision: { type: String, enum: ["pending","approved","rejected"], default: "pending" },
-      comments: { type: String, default: null },
-      decidedAt: { type: Date, default: null },
-      default: { type: Boolean, default: false },
-    }
-  ],
+  supervisorApprovals: {
+    type: [
+      {
+        approverId: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", default: null },
+        role: { type: String, enum: ["supervisor","department_head","HR","IT"] },
+        decision: { type: String, enum: ["pending","approved","rejected"], default: "pending" },
+        comments: { type: String },
+        decidedAt: { type: Date },
+      }
+    ],
+    default: []
+  },
+  
 
   grantedPermissionsByIT: [
     {
-      typeName: { type: String, default: null },
-      canRead: { type: Boolean, default: false },
-      canUpdate: { type: Boolean, default: false },
-      canDelete: { type: Boolean, default: false },
       approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", default: null },
-      decision: { type: String, enum: ["pending","approved","rejected"], default: "pending" },
+      permition:{type:mongoose.Schema.Types.ObjectId, ref:"AccessType", default:null},
       comments: { type: String, default: null },
-      approvedAt: { type: Date, default: null },
       accessGrantedDate: { type: Date, default: null },
       accessExpiryDate: { type: Date, default: null },
       isAccessActive: { type: Boolean, default: false },
-      default: { type: Boolean, default: false }
     }
   ],
-
 
 
   status: { 
