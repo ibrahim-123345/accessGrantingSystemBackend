@@ -256,7 +256,7 @@ const itApproval = async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      approvedBy, // Employee ObjectId
+      approvedBy, 
       permition,  // AccessType ObjectId
       comments,
       accessGrantedDate,
