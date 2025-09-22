@@ -117,6 +117,49 @@ const deleteNotification = async (req, res) => {
   }
 };
 
+
+
+
+
+
+
+const getNotificationsByRecipient = async (req, res) => {
+  try {
+    const { recipientId } = req.params;
+
+    if (!recipientId) {
+      return res.status(400).json({ message: "Recipient ID is required" });
+    }
+
+    const notifications = await Notification.find({ recipientId })
+      .sort({ createdAt: -1 }); // newest first
+
+    if (!notifications || notifications.length === 0) {
+      return res.status(404).json({ message: "No notifications found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      count: notifications.length,
+      data: notifications,
+    });
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
 // =============================
 // Exports
 // =============================
@@ -125,5 +168,6 @@ module.exports = {
   getNotificationById,
   createNotification,
   markAsRead,
-  deleteNotification
+  deleteNotification,
+  getNotificationsByRecipient
 };

@@ -27,6 +27,22 @@ const getAllAccessRequests = async (req, res) => {
 // =============================
 // Get Access Request by ID
 // =============================
+const getAccessRequestByIdLimit = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const request = await AccessRequest.findById(id).limit(2);
+    if (!request) return sendResponse(res, 404, false, "Access request not found");
+    return sendResponse(res, 200, true, "Access request fetched successfully", request);
+  } catch (error) {
+    console.error("Error fetching access request:", error);
+    return sendResponse(res, 500, false, "Internal server error");
+  }
+};
+
+
+// =============================
+// Get Access Request by ID
+// =============================
 const getAccessRequestById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -38,6 +54,16 @@ const getAccessRequestById = async (req, res) => {
     return sendResponse(res, 500, false, "Internal server error");
   }
 };
+
+
+
+
+
+
+
+
+
+
 
 // =============================
 // Create Access Request
@@ -345,6 +371,102 @@ const itApproval = async (req, res) => {
 
 
 
+const getStatiticsByAdmin = async (req, res) => {
+  try {
+    const totalRequests = await AccessRequest.countDocuments();
+    const pendingRequests = await AccessRequest.countDocuments({ status: "pending" });
+    const approvedRequests = await AccessRequest.countDocuments({ status: { $in: ["supervisor_approved", "it_approved"] } });
+    const rejectedRequests = await AccessRequest.countDocuments({ status: "rejected" });
+
+    return sendResponse(res, 200, true, "Statistics fetched successfully", {
+      totalRequests,
+      pendingRequests,
+      approvedRequests,
+      rejectedRequests
+    });
+  } catch (error) {
+    console.error("Error fetching statistics:", error);
+    return sendResponse(res, 500, false, "Internal server error");
+  }
+}
+
+
+
+
+
+const getStatitics = async (req, res) => {
+  try {
+    const { role, employeeId } = req.user;
+
+    let filter = {};
+    if (role === "employee") {
+      filter = { employeeId };
+    } else if (role === "supervisor") {
+      const supervisedEmployees = await Employee.find({ supervisorId: employeeId }).select("_id");
+      const supervisedIds = supervisedEmployees.map(emp => emp._id);
+      filter = { employeeId: { $in: supervisedIds } };
+    }
+
+    const totalRequests = await AccessRequest.countDocuments(filter);
+    const pendingRequests = await AccessRequest.countDocuments({ ...filter, status: "pending" });
+    const approvedRequests = await AccessRequest.countDocuments({ ...filter, status: { $in: ["supervisor_approved", "it_approved"] } });
+    const rejectedRequests = await AccessRequest.countDocuments({ ...filter, status: "rejected" });
+
+    return sendResponse(res, 200, true, "Statistics fetched successfully", {
+      totalRequests,
+      pendingRequests,
+      approvedRequests,
+      rejectedRequests
+    });
+  } catch (error) {
+    console.error("Error fetching statistics:", error);
+    return sendResponse(res, 500, false, "Internal server error");
+  }
+};
+
+
+
+
+
+
+const getPopularSystemsPlatforms = async (req, res) => {
+  try {
+    const results = await AccessRequest.aggregate([
+      {
+        $group: {
+          _id: "$systemId", 
+          systemName: { $first: "$system.systemName" },
+          systemType: { $first: "$system.systemType" },
+          securityLevel: { $first: "$system.securityLevel" },
+          totalRequests: { $sum: 1 },
+        },
+      },
+      { $sort: { totalRequests: -1 } }, 
+      { $limit: 5 }, 
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: "Popular Systems Platforms by Access Requests",
+      data: results,
+    });
+  } catch (error) {
+    console.error("Error fetching popular systems platforms:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch popular systems platforms",
+      error: error.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+
 
 // =============================
 // Exports
@@ -356,5 +478,9 @@ module.exports = {
   updateAccessRequest,
   deleteAccessRequest,
   supervisorApproval,
-  itApproval
+  itApproval,
+  getStatitics,
+  getStatiticsByAdmin,
+  getAccessRequestByIdLimit,
+  getPopularSystemsPlatforms
 };

@@ -9,11 +9,12 @@ const{createDepartment,deleteDepartment,getDepartmentById,getAllDepartments,upda
 const{createSystemsPlatform,getAllSystemsPlatforms,deleteSystemsPlatform,getSystemsPlatformById,updateSystemsPlatform}=require('./controllers/systemsPlatform');
 const{getAccessTypeById,createAccessType,deleteAccessType,getAllAccessTypes,updateAccessType}=require('./controllers/accessTypes');
 const{getAllEmployees,getEmployeeById,createEmployee,updateEmployee,deleteEmployee}=require('./controllers/employee');
-const{createAccessRequest,getAllAccessRequests,getAccessRequestById,updateAccessRequest,deleteAccessRequest,supervisorApproval,itApproval}=require('./controllers/accessRequest');
-const{createNotification,deleteNotification,getAllNotifications,getNotificationById,markAsRead}=require('./controllers/notification');
+const{createAccessRequest,getAllAccessRequests,getAccessRequestById,updateAccessRequest,deleteAccessRequest,supervisorApproval,itApproval,getAccessRequestByIdLimit,getStatitics,getStatiticsByAdmin,getPopularSystemsPlatforms}=require('./controllers/accessRequest');
+const{createNotification,deleteNotification,getAllNotifications,getNotificationById,markAsRead,getNotificationsByRecipient}=require('./controllers/notification');
 const{login, createUser}=require('./controllers/authentication')
 const { authenticate } = require('./middlewares/auth');
 const { authorize } = require('./middlewares/authorization');
+
 
 
 
@@ -83,6 +84,11 @@ app.get('/api/notifications', authenticate,getAllNotifications)
 app.get('/api/notifications/:id',authenticate, getNotificationById)
 app.patch('/api/notifications/:id/markAsRead',authenticate, markAsRead)
 app.delete('/api/notifications/:id',authenticate,authorize("admin"), deleteNotification)
+app.get('/api/notifications/recipient/:recipientId', getNotificationsByRecipient);
+app.get('/api/statistics', getStatiticsByAdmin);
+app.get('/api/accessRequests/limit/:id', authenticate,authorize("employee","supervisor","IT"), getAccessRequestByIdLimit);
+app.get('/api/statistics/:id', getStatitics);
+app.get('/api/popularSystemsPlatforms', getPopularSystemsPlatforms);
 
 
 
