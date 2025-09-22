@@ -32,16 +32,16 @@ app.use(server.json())
 
 
 // Routes
-app.post('/api/departments',authenticate, createDepartment)
-app.get('/api/departments', authenticate,getAllDepartments)
-app.get('/api/departments/:id',authenticate, getDepartmentById)
-app.put('/api/departments/:id',authenticate, updateDepartment)
-app.delete('/api/departments/:id',authenticate, deleteDepartment)
+app.post('/api/departments', createDepartment)
+app.get('/api/departments',getAllDepartments)
+app.get('/api/departments/:id', getDepartmentById)
+app.put('/api/departments/:id', updateDepartment)
+app.delete('/api/departments/:id', deleteDepartment)
 
 
 
 //systems platform routes
-app.post('/api/systemsPlatforms',authenticate, createSystemsPlatform)
+app.post('/api/systemsPlatforms',createSystemsPlatform)
 app.get('/api/systemsPlatforms',authenticate, getAllSystemsPlatforms)
 app.patch('/api/systemsPlatforms/:id',authenticate,updateSystemsPlatform)
 app.get('/api/systemsPlatforms/:id',authenticate,getSystemsPlatformById)
@@ -50,18 +50,18 @@ app.delete('/api/systemsPlatforms/:id',authenticate,deleteSystemsPlatform)
 
 
 //access types routes
-app.post('/api/accessTypes',authenticate, createAccessType)
-app.get('/api/accessTypes', authenticate,getAllAccessTypes)
-app.get('/api/accessTypes/:id',authenticate, getAccessTypeById)
+app.post('/api/accessTypes', createAccessType)
+app.get('/api/accessTypes', getAllAccessTypes)
+app.get('/api/accessTypes/:id', getAccessTypeById)
 app.put('/api/accessTypes/:id',authenticate, updateAccessType)
 app.delete('/api/accessTypes/:id',authenticate, deleteAccessType)
 
 
 
 //employee routes
-app.get('/api/employees', authenticate,authorize("employee","supervisor","IT"),getAllEmployees)
-app.get('/api/employees/:id',authenticate,authorize("employee","supervisor","IT"), getEmployeeById)
-app.post('/api/employees', authenticate,authorize("employee","supervisor","IT"),createEmployee)
+app.get('/api/employees',getAllEmployees)
+app.get('/api/employees/:id', getEmployeeById)
+app.post('/api/employees',createEmployee)
 app.put('/api/employees/:id',authenticate,authorize("employee","supervisor","IT"), updateEmployee)
 app.delete('/api/employees/:id',authenticate,authorize("employee","supervisor","IT"), deleteEmployee)
 
@@ -69,7 +69,7 @@ app.delete('/api/employees/:id',authenticate,authorize("employee","supervisor","
 
 
 //access request routes
-app.post('/api/accessRequests',authenticate, createAccessRequest)
+app.post('/api/accessRequests', createAccessRequest)
 app.get('/api/accessRequests', authenticate,authorize("employee","supervisor","IT","admin"),getAllAccessRequests)
 app.get('/api/accessRequests/:id',authenticate,authorize("employee","supervisor","IT"), getAccessRequestById)
 app.put('/api/accessRequests/:id',authenticate,authorize("employee","supervisor","IT"), updateAccessRequest)
@@ -80,7 +80,7 @@ app.post('/api/accessRequests/:id/itApproval',authenticate,authorize("admin"), i
 
 //notification routes
 app.post('/api/notifications',authenticate, createNotification)
-app.get('/api/notifications', authenticate,getAllNotifications)
+app.get('/api/notifications',getAllNotifications)
 app.get('/api/notifications/:id',authenticate, getNotificationById)
 app.patch('/api/notifications/:id/markAsRead',authenticate, markAsRead)
 app.delete('/api/notifications/:id',authenticate,authorize("admin"), deleteNotification)

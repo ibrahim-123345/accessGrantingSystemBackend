@@ -20,7 +20,7 @@ const notificationSchema = new mongoose.Schema({
   type: { 
     type: String, 
   enum: [
-      "pending","supervisor_approved","it_approved",
+      "pending","supervisor_need_to_approve","supervisor_approved","it_approved",
       "approved","rejected","active","expired","revoked"
     ],     required: true 
   },

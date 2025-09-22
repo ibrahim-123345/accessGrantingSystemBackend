@@ -98,38 +98,38 @@ const login = async (req, res) => {
 
 
 
-
-const createUser=async(req,res)=>{
+// =============================
+// Create User
+// =============================
+const createUser = async (req, res) => {
   try {
-    const {email, password, role} = req.body;
+    const { email, password, role } = req.body;
 
-    // Basic validation
     if (!email || !password || !role) {
       return sendResponse(res, 400, false, "Missing required fields");
     }
 
-
-    // Check for duplicate email
-    const existingUser = await Authentication.findOne({ email });
-    if (existingUser) {
-      return sendResponse(res, 409, false, "Email or Employee ID already in use");
+    const employee = await Employee.findOne({ email });
+    if (!employee) {
+      return sendResponse(res, 400, false, "No employee with this email exists in the company");
     }
 
+    const existingUser = await Authentication.findOne({ email });
+    if (existingUser) {
+      return sendResponse(res, 409, false, "User already exists with this email");
+    }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user
     const newUser = new Authentication({
+      employeeId: employee._id , // Reference to employee
       email,
       password: hashedPassword,
       role
     });
 
-    console.log("New user data:", newUser);
-
     const savedUser = await newUser.save();
-    return sendResponse(res, 201, true, "User created successfully", newUser);
+    return sendResponse(res, 201, true, "User created successfully", savedUser);
   } catch (error) {
     console.error("Error creating user:", error);
     return sendResponse(res, 500, false, "Internal server error");

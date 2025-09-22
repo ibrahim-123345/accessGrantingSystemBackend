@@ -17,7 +17,7 @@ const authenticationSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["employee", "supervisor", "department_head", "HR", "IT", "admin"],
+    enum: ["employee", "supervisor", "admin"],
     default: "employee"
   },
   isActive: { type: Boolean, default: true },

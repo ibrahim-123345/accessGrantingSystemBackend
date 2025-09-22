@@ -112,7 +112,7 @@ const createAccessRequest = async (req, res) => {
       const newNotification = new Notification({
         recipientId: emp.supervisorId,
         senderId: employeeId,
-        type: "approval_needed",
+        type: "supervisor_need_to_approve",
         priority: "high",
         title: "Access Request Approval Needed",
         message: `New access request submitted by ${emp.fullName}. Please review and approve.`,
