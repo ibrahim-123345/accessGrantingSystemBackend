@@ -4,6 +4,28 @@ const { SystemsPlatform } = require("../models/systemsPlatform");
 const { Notification } = require("../models/notification");
 const{AccessType}=require("../models/accessTypes");
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // =============================
 // Helper: Standardized Response
 // =============================
@@ -27,14 +49,12 @@ const getAllAccessRequests = async (req, res) => {
 // =============================
 // Get Access Request by ID
 // =============================
-const getAccessRequestByIdLimit = async (req, res) => {
+const getAccessRequestLimit = async (req, res) => {
   try {
-    const { id } = req.params;
-    const request = await AccessRequest.findById(id).limit(2);
-    if (!request) return sendResponse(res, 404, false, "Access request not found");
-    return sendResponse(res, 200, true, "Access request fetched successfully", request);
+    const requests = await AccessRequest.find().limit(40).sort({ createdAt: -1 });
+    return sendResponse(res, 200, true, "Access requests fetched successfully", requests);
   } catch (error) {
-    console.error("Error fetching access request:", error);
+    console.error("Error fetching access requests:", error);
     return sendResponse(res, 500, false, "Internal server error");
   }
 };
@@ -58,6 +78,36 @@ const getAccessRequestById = async (req, res) => {
 
 
 
+// =============================
+// Get Access Requests by Employee ID
+// =============================
+const getAccessRequestsByEmployeeId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return sendResponse(res, 400, false, "Employee ID is required");
+    }
+
+    const requests = await AccessRequest.find({ employeeId:userId });
+    console.log("Fetched requests:", requests);
+
+    if (!requests || requests.length === 0) {
+      return sendResponse(res, 404, false, "No access requests found for this employee");
+    }
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Access requests fetched successfully",
+      requests
+    );
+  } catch (error) {
+    console.log("Error fetching access requests by employeeId:", error);
+    return sendResponse(res, 500, false, "Internal server error");
+  }
+};
 
 
 
@@ -86,11 +136,33 @@ const createAccessRequest = async (req, res) => {
       return sendResponse(res, 400, false, "EmployeeId and systemId are required");
     }
 
-    const emp = await Employee.findById(employeeId);
+    const emp = await Employee.findById(employeeId).populate("supervisorId");
     if (!emp) return sendResponse(res, 400, false, "Invalid employeeId: employee does not exist");
 
     const sys = await SystemsPlatform.findById(systemId);
     if (!sys) return sendResponse(res, 400, false, "Invalid systemId: system does not exist");
+
+    // Build supervisor details (without renaming anything else)
+    let supervisorDetails = null;
+    if (emp.supervisorId) {
+      supervisorDetails = {
+        _id: emp.supervisorId._id,
+        fullName: emp.supervisorId.fullName,
+        email: emp.supervisorId.email,
+        jobTitle: emp.supervisorId.jobTitle,
+        department: emp.supervisorId.department,
+        departmentId: emp.supervisorId.departmentId
+      };
+    } else {
+      supervisorDetails = {
+        _id: emp._id,
+        fullName: emp.fullName,
+        email: emp.email,
+        jobTitle: emp.jobTitle,
+        department: emp.department,
+        departmentId: emp.departmentId
+      };
+    }
 
     const newRequest = new AccessRequest({
       employeeId,
@@ -101,16 +173,17 @@ const createAccessRequest = async (req, res) => {
       durationType: durationType || "temporary",
       requestedStartDate: requestedStartDate || null,
       requestedEndDate: requestedEndDate || null,
+      supervisor: supervisorDetails, // ✅ added without touching other fields
       supervisorApprovals: [],
       grantedPermissionsByIT: []
     });
 
     const savedRequest = await newRequest.save();
 
-    // Create a notification for the supervisor if exists
+    // Notification only if real supervisor exists
     if (emp.supervisorId) {
       const newNotification = new Notification({
-        recipientId: emp.supervisorId,
+        recipientId: emp.supervisorId._id,
         senderId: employeeId,
         type: "supervisor_need_to_approve",
         priority: "high",
@@ -122,12 +195,19 @@ const createAccessRequest = async (req, res) => {
       await newNotification.save();
     }
 
-    return sendResponse(res, 201, true, "Access request created successfully, please wait for supervisor approval", savedRequest);
+    return sendResponse(
+      res,
+      201,
+      true,
+      "Access request created successfully, please wait for supervisor approval",
+      savedRequest
+    );
   } catch (error) {
     console.error("Error creating access request:", error);
     return sendResponse(res, 500, false, "Internal server error");
   }
 };
+
 
 // =============================
 // Update Access Request
@@ -276,98 +356,215 @@ const supervisorApproval = async (req, res) => {
 // =============================
 // IT approval
 // =============================
-
-
 const itApproval = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      approvedBy, 
-      permition,  // AccessType ObjectId
-      comments,
-      accessGrantedDate,
-      accessExpiryDate,
-      isAccessActive
-    } = req.body;
+    const { action, approvedBy, comments, grantedPermissions } = req.body;
 
-    if (!approvedBy || !permition) {
-      return sendResponse(res, 400, false, "approvedBy and permition are required.");
+    console.log("IT Approval Data:", req.body);
+
+    if (!approvedBy) {
+      return sendResponse(res, 400, false, "approvedBy is required.");
     }
 
     const approver = await Employee.findById(approvedBy);
-    if (!approver) return sendResponse(res, 400, false, "Invalid approvedBy: employee does not exist.");
-
-    const accessType = await AccessType.findById(permition);
-    if (!accessType) return sendResponse(res, 400, false, "Invalid permition: access type does not exist.");
-
-    // Try to update existing grantedPermissionsByIT entry
-    let request = await AccessRequest.findOneAndUpdate(
-      {
-        _id: id,
-        "grantedPermissionsByIT.approvedBy": approvedBy
-      },
-      {
-        $set: {
-          "grantedPermissionsByIT.$.permition": permition,
-          "grantedPermissionsByIT.$.comments": comments || null,
-          "grantedPermissionsByIT.$.accessGrantedDate": accessGrantedDate || new Date(),
-          "grantedPermissionsByIT.$.accessExpiryDate": accessExpiryDate || null,
-          "grantedPermissionsByIT.$.isAccessActive": typeof isAccessActive === "boolean" ? isAccessActive : true
-        }
-      },
-      { new: true }
-    );
-
-    // If not found, push a new entry
-    if (!request) {
-      request = await AccessRequest.findByIdAndUpdate(
-        id,
-        {
-          $push: {
-            grantedPermissionsByIT: {
-              approvedBy,
-              permition,
-              comments: comments || null,
-              accessGrantedDate: accessGrantedDate || new Date(),
-              accessExpiryDate: accessExpiryDate || null,
-              isAccessActive: typeof isAccessActive === "boolean" ? isAccessActive : true
-            }
-          }
-        },
-        { new: true }
-      );
-      if (!request) {
-        return sendResponse(res, 404, false, "Access request not found.");
-      }
+    if (!approver) {
+      return sendResponse(res, 400, false, "Invalid approvedBy: employee does not exist.");
     }
 
-    request.status = "it_approved";
-    await request.save();
+    let request = await AccessRequest.findById(id);
+    if (!request) {
+      return sendResponse(res, 404, false, "Access request not found.");
+    }
 
-    // Notify the employee
-    const newNotification = new Notification({
-      recipientId: request.employeeId,
-      senderId: approvedBy,
-      type: request.status, 
-      priority: "medium",
-      title: "IT Access Request Update",
-      message: `Your access request has been processed by IT.`,
-      relatedSystem: request.systemId,
-      channels: ["email", "inApp"]
-    });
-    await newNotification.save();
+    // ========================
+    // CASE 1: REJECT
+    // ========================
+    if (action === "reject") {
+      request.status = "rejected";
+      request.grantedPermissionsByIT = [];
+      await request.save();
 
-    return sendResponse(res, 200, true, "IT approval processed successfully.", request);
+      // HTML-formatted rejection message
+      const rejectionMessage = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #333;">
+          <h2 style="color: #c62828;">❌ Your access request has been rejected</h2>
+          <p style="font-size: 16px;">The IT team has reviewed your access request for <strong>${request.system?.systemName || 'the system'}</strong>.</p>
+          <div style="margin: 16px 0; padding: 12px; border: 1px solid #ccc; border-radius: 6px; background: #ffe6e6;">
+            <p style="margin: 4px 0;"><strong>Reason:</strong> ${comments || 'No specific reason provided.'}</p>
+            <p style="margin: 4px 0;"><strong>Status:</strong> Rejected</p>
+            <p style="margin: 4px 0;"><strong>Requested by:</strong> ${request.employee?.fullName || 'Unknown'}</p>
+          </div>
+          <p style="font-size: 14px; color: #555;">If you believe this was a mistake, please contact your IT department.</p>
+        </div>
+      `;
+
+      const newNotification = new Notification({
+        recipientId: request.employeeId,
+        senderId: approvedBy,
+        type: request.status,
+        priority: "high",
+        title: "IT Access Request Rejected",
+        message: rejectionMessage,
+        relatedSystem: request.systemId,
+        channels: ["email", "inApp"],
+      });
+      await newNotification.save();
+
+      return sendResponse(res, 200, true, "IT rejection processed successfully.", request);
+    }
+
+    // ========================
+    // CASE 2: APPROVE
+    // ========================
+    if (action === "approve") {
+      if (!grantedPermissions || grantedPermissions.length === 0) {
+        request.status = "rejected";
+        await request.save();
+
+        const newNotification = new Notification({
+          recipientId: request.employeeId,
+          senderId: approvedBy,
+          type: request.status,
+          priority: "high",
+          title: "IT Access Request Rejected",
+          message: "Your access request was rejected because no permissions were provided.",
+          relatedSystem: request.systemId,
+          channels: ["email", "inApp"],
+        });
+        await newNotification.save();
+
+        return sendResponse(res, 400, false, "Approval failed: no grantedPermissions provided.", request);
+      }
+
+      // Collect access details for notification
+      const accessDetails = [];
+
+      for (const gp of grantedPermissions) {
+        const {
+          permission: permition,
+          accessGrantedDate,
+          accessExpiryDate,
+          isAccessActive,
+        } = gp;
+
+        const accessType = await AccessType.findById(permition);
+        if (!accessType) {
+          request.status = "rejected";
+          await request.save();
+          return sendResponse(
+            res,
+            400,
+            false,
+            `Approval failed: Invalid permition ${permition}. Request marked as rejected.`,
+            request
+          );
+        }
+
+        // Update existing or push new grantedPermissionsByIT entry
+        let updated = await AccessRequest.findOneAndUpdate(
+          {
+            _id: id,
+            "grantedPermissionsByIT.approvedBy": approvedBy,
+            "grantedPermissionsByIT.permition": permition,
+          },
+          {
+            $set: {
+              "grantedPermissionsByIT.$.comments": comments || null,
+              "grantedPermissionsByIT.$.accessGrantedDate": accessGrantedDate || new Date(),
+              "grantedPermissionsByIT.$.accessExpiryDate": accessExpiryDate || null,
+              "grantedPermissionsByIT.$.isAccessActive":
+                typeof isAccessActive === "boolean" ? isAccessActive : true,
+            },
+          },
+          { new: true }
+        );
+
+        if (!updated) {
+          updated = await AccessRequest.findByIdAndUpdate(
+            id,
+            {
+              $push: {
+                grantedPermissionsByIT: {
+                  approvedBy,
+                  permition,
+                  comments: comments || null,
+                  accessGrantedDate: accessGrantedDate || new Date(),
+                  accessExpiryDate: accessExpiryDate || null,
+                  isAccessActive:
+                    typeof isAccessActive === "boolean" ? isAccessActive : true,
+                },
+              },
+            },
+            { new: true }
+          );
+          if (!updated) {
+            request.status = "rejected";
+            await request.save();
+            return sendResponse(res, 404, false, "Access request not found. Marked as rejected.", request);
+          }
+        }
+
+        request = updated;
+
+        // Build access detail for notification
+        const canDo = [];
+        const cannotDo = [];
+        if (accessType.canRead) canDo.push("read"); else cannotDo.push("read");
+        if (accessType.canInsert) canDo.push("insert"); else cannotDo.push("insert");
+        if (accessType.canUpdate) canDo.push("update"); else cannotDo.push("update");
+        if (accessType.canDelete) canDo.push("delete"); else cannotDo.push("delete");
+
+        accessDetails.push({
+          typeName: accessType.typeName,
+          canDo,
+          cannotDo,
+          expiry: accessExpiryDate || "N/A",
+        });
+      }
+
+      // ✅ Update status to "approved" after IT approves
+      request.status = "approved";
+      await request.save();
+
+      // Build HTML-formatted approval message
+      const approvalMessage = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #333;">
+          <h2 style="color: #2e7d32;">✅ Your access request has been approved</h2>
+          <p style="font-size: 16px;">You have been granted access to <strong>${accessDetails.length}</strong> resource(s) in <strong>${request.system?.systemName || 'the system'}</strong>:</p>
+          ${accessDetails.map((d, i) => `
+            <div style="margin: 12px 0; padding: 12px; border: 1px solid #ccc; border-radius: 6px; background: #e8f5e9;">
+              <p style="margin: 4px 0;"><strong>${i + 1}. ${d.typeName}</strong></p>
+              <p style="margin: 4px 0;">✔ Can: ${d.canDo.join(", ")}</p>
+              <p style="margin: 4px 0;">✖ Cannot: ${d.cannotDo.join(", ")}</p>
+              <p style="margin: 4px 0;">⏳ Expires: ${d.expiry === "N/A" ? "No expiry" : new Date(d.expiry).toDateString()}</p>
+            </div>
+          `).join('')}
+          <p style="font-size: 14px; color: #555;">Please use your access responsibly. Contact IT if there are any issues.</p>
+        </div>
+      `;
+
+      const newNotification = new Notification({
+        recipientId: request.employeeId,
+        senderId: approvedBy,
+        type: request.status,
+        priority: "medium",
+        title: "IT Access Request Approved",
+        message: approvalMessage,
+        relatedSystem: request.systemId,
+        channels: ["email", "inApp"],
+      });
+      await newNotification.save();
+
+      return sendResponse(res, 200, true, "IT approval processed successfully.", request);
+    }
+
+    return sendResponse(res, 400, false, "Invalid action type.");
   } catch (error) {
     console.error("Error in itApproval:", error);
     return sendResponse(res, 500, false, "Internal server error.");
   }
 };
-
-
-
-
-
 
 
 
@@ -396,16 +593,10 @@ const getStatiticsByAdmin = async (req, res) => {
 
 const getStatitics = async (req, res) => {
   try {
-    const { role, employeeId } = req.user;
+    const { role, employeeId } = req.params;
 
-    let filter = {};
-    if (role === "employee") {
-      filter = { employeeId };
-    } else if (role === "supervisor") {
-      const supervisedEmployees = await Employee.find({ supervisorId: employeeId }).select("_id");
-      const supervisedIds = supervisedEmployees.map(emp => emp._id);
-      filter = { employeeId: { $in: supervisedIds } };
-    }
+    let filter = {employeeId};
+ 
 
     const totalRequests = await AccessRequest.countDocuments(filter);
     const pendingRequests = await AccessRequest.countDocuments({ ...filter, status: "pending" });
@@ -481,6 +672,7 @@ module.exports = {
   itApproval,
   getStatitics,
   getStatiticsByAdmin,
-  getAccessRequestByIdLimit,
-  getPopularSystemsPlatforms
+  getAccessRequestLimit,
+  getPopularSystemsPlatforms,
+  getAccessRequestsByEmployeeId
 };

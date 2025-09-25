@@ -1,5 +1,10 @@
 const { SystemsPlatform } = require("../models/systemsPlatform");
 const { Department } = require("../models/departments");
+const{AccessRequest}=require('../models/accessRequest')
+const{AccessType}=require('../models/accessTypes')
+const { Employee } = require("../models/employee");
+
+
 
 // =============================
 // Helper: Standardized Response
@@ -30,13 +35,11 @@ const createSystemsPlatform = async (req, res) => {
       return sendResponse(res, 400, false, "Missing required fields");
     }
 
-    // 🔍 Check if owner department exists
     const department = await Department.findById(ownerDepartmentId);
     if (!department) {
       return sendResponse(res, 404, false, "Owner department does not exist");
     }
 
-    // 🔍 Check for duplicate systemName or systemUrl
     const existingSystem = await SystemsPlatform.findOne({
       $or: [{ systemName }, { systemUrl }],
     });
@@ -144,10 +147,189 @@ const deleteSystemsPlatform = async (req, res) => {
   }
 };
 
+
+
+
+
+// =============================
+// Get System Platform with Full Details & Supervisor Summary
+// =============================
+const getSystemDetails = async (req, res) => {
+  try {
+    const { systemId } = req.params;
+    if (!systemId) return sendResponse(res, 400, false, "Missing systemId");
+
+    // Fetch system platform
+    const system = await SystemsPlatform.findById(systemId).lean();
+    if (!system) return sendResponse(res, 404, false, "System platform not found");
+
+    // Populate department info
+    const department = await Department.findById(system.ownerDepartmentId).lean();
+    const departmentObj = department
+      ? {
+          id: department._id,
+          departmentName: department.departmentName,
+          departmentCode: department.departmentCode,
+          description: department.description,
+          isActive: department.isActive,
+        }
+      : null;
+
+    // Fetch approved access requests for this system
+    const approvedRequests = await AccessRequest.find({
+      systemId: system._id,
+      status: "approved",
+    }).lean();
+
+    let activeAccessCount = 0;
+    let expiredAccessCount = 0;
+    let temporaryCount = 0;
+    let permanentCount = 0;
+    let totalRemainingDays = 0;
+    let temporaryRequestsCount = 0;
+
+    // Preload all AccessTypes to avoid multiple queries
+    const accessTypeIds = approvedRequests.flatMap(req =>
+      req.grantedPermissionsByIT.map(p => p.permition)
+    );
+    const accessTypes = await AccessType.find({ _id: { $in: accessTypeIds } }).lean();
+    const accessTypeMap = {};
+    accessTypes.forEach(type => {
+      accessTypeMap[type._id.toString()] = type;
+    });
+
+    // Preload potential supervisors (all employees with role supervisor/department_head)
+    const supervisors = await Employee.find({ "role": { $in: ["supervisor", "department_head"] } })
+      .select("fullName email jobTitle department").lean();
+
+    // Map employees with approved access
+    const peopleWithAccess = approvedRequests.map(req => {
+      const permissions = req.grantedPermissionsByIT.map(permission => {
+        const typeInfo = permission.permition ? accessTypeMap[permission.permition.toString()] : null;
+
+        // Calculate remaining days
+        let remainingDays = null;
+        if (permission.accessExpiryDate) {
+          const now = new Date();
+          remainingDays = Math.max(Math.ceil((new Date(permission.accessExpiryDate) - now) / (1000 * 60 * 60 * 24)), 0);
+        }
+
+        return {
+          approvedBy: permission.approvedBy,
+          permission: typeInfo,
+          comments: permission.comments,
+          accessGrantedDate: permission.accessGrantedDate,
+          accessExpiryDate: permission.accessExpiryDate,
+          isAccessActive: permission.isAccessActive,
+          remainingDays,
+        };
+      });
+
+      // Update stats
+      const isAnyActive = permissions.some(p => p.isAccessActive);
+      if (isAnyActive) activeAccessCount++;
+      if (!isAnyActive) expiredAccessCount++;
+
+      if (req.durationType === "temporary") {
+        temporaryCount++;
+        const remainingDaysSum = permissions.reduce((sum, p) => sum + (p.remainingDays || 0), 0);
+        totalRemainingDays += remainingDaysSum / (permissions.length || 1);
+        temporaryRequestsCount++;
+      } else if (req.durationType === "permanent") {
+        permanentCount++;
+      }
+
+      // Supervisor approvals summary
+      let supervisorApprovalsSummary = [];
+      if (req.supervisorApprovals && req.supervisorApprovals.length > 0) {
+        supervisorApprovalsSummary = req.supervisorApprovals.map(a => ({
+          approverId: a.approverId,
+          role: a.role,
+          decision: a.decision,
+          comments: a.comments,
+          decidedAt: a.decidedAt,
+        }));
+      } else {
+        // If no supervisor approvals, list potential supervisors from employee's department
+        const empDept = req.employee?.departmentName;
+        const deptSupervisors = supervisors.filter(s => s.department.departmentName === empDept);
+        supervisorApprovalsSummary = deptSupervisors.map(s => ({
+          approverId: s._id,
+          fullName: s.fullName,
+          email: s.email,
+          jobTitle: s.jobTitle,
+          role: s.role,
+          decision: "pending",
+        }));
+      }
+
+      return {
+        id: req.employeeId?._id || null,
+        fullName: req.employee?.fullName || null,
+        email: req.employee?.email || null,
+        employeeId: req.employee?.employeeId || null,
+        departmentName: req.employee?.departmentName || null,
+        jobTitle: req.employee?.jobTitle || null,
+        durationType: req.durationType,
+        requestedStartDate: req.requestedStartDate,
+        requestedEndDate: req.requestedEndDate,
+        grantedPermissions: permissions,
+        supervisorApprovals: supervisorApprovalsSummary,
+      };
+    });
+
+    const averageRemainingDays =
+      temporaryRequestsCount > 0 ? totalRemainingDays / temporaryRequestsCount : null;
+
+    // Department-level statistics
+    const departmentStats = {
+      totalApprovedAccess: peopleWithAccess.length,
+      activeAccessCount,
+      expiredAccessCount,
+      temporaryCount,
+      permanentCount,
+      averageRemainingDaysForTemporaryAccess: averageRemainingDays,
+    };
+
+    // Construct final response
+    const responseData = {
+      id: system._id,
+      systemName: system.systemName,
+      systemType: system.systemType,
+      description: system.description,
+      systemUrl: system.systemUrl,
+      securityLevel: system.securityLevel,
+      isActive: system.isActive,
+      technicalContact: system.technicalContact,
+      createdAt: system.createdAt,
+      updatedAt: system.updatedAt,
+      department: departmentObj,
+      departmentStats,
+      peopleWithAccess,
+    };
+
+    return sendResponse(res, 200, true, "System platform details fetched successfully", responseData);
+
+  } catch (error) {
+    console.error("Error fetching system platform details:", error);
+    return sendResponse(res, 500, false, "Internal server error");
+  }
+};
+
+
+
+
+
+
+
+
+
+
 module.exports = {
   createSystemsPlatform,
   getAllSystemsPlatforms,
   getSystemsPlatformById,
   updateSystemsPlatform,
   deleteSystemsPlatform,
+  getSystemDetails
 };

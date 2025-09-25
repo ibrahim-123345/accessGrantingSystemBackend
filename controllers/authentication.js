@@ -50,6 +50,7 @@ const login = async (req, res) => {
 
     if (employee) {
       const {
+        _id:empId,
         employeeId: employeeId,
         fullName,
         phone,
@@ -65,6 +66,7 @@ const login = async (req, res) => {
 
       payload.employee = {
         employeeId,
+        empId,
         fullName,
         phone,
         jobTitle,

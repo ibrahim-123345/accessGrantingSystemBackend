@@ -7,23 +7,32 @@ const sendResponse = (res, status, success, message, data = null) => {
 
 const createDepartment = async (req, res) => {
   try {
-    const { departmentName, departmentCode, description } = req.body;
+    const { departmentName, departmentCode, description, headEmail } = req.body;
 
-    // Basic validation
     if (!departmentName || !departmentCode) {
       return sendResponse(res, 400, false, "Department name and code are required");
     }
 
-    // Check for existing department with the same code
     const existingDepartment = await Department.findOne({ departmentCode });
     if (existingDepartment) {
       return sendResponse(res, 400, false, "Department code already exists");
+    }
+
+    let headOfDepartment = undefined;
+
+    // If headEmail is provided, find the employee
+    if (headEmail) {
+      const employee = await Employee.findOne({ email: headEmail });
+      if (employee) headOfDepartment = employee._id;
+      else
+        return sendResponse(res, 404, false, "Employee with provided email not found");
     }
 
     const newDepartment = new Department({
       departmentName,
       departmentCode,
       description,
+      headOfDepartment, // optional
     });
 
     const savedDepartment = await newDepartment.save();
@@ -61,20 +70,28 @@ const getDepartmentById = async (req, res) => {
 const updateDepartment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { departmentName, departmentCode, description, isActive } = req.body;
+    const { departmentName, departmentCode, description, isActive, headEmail } = req.body;
 
-    // Check if department exists
     const department = await Department.findById(id);
     if (!department) {
       return sendResponse(res, 404, false, "Department not found");
     }
 
-    // Check for duplicate departmentCode if updating it
     if (departmentCode && departmentCode !== department.departmentCode) {
       const existingDepartment = await Department.findOne({ departmentCode });
       if (existingDepartment) {
         return sendResponse(res, 400, false, "Department code already exists");
       }
+    }
+
+    let headOfDepartment = department.headOfDepartment; // keep current if not updated
+
+    // If headEmail is provided, find employee
+    if (headEmail) {
+      const employee = await Employee.findOne({ email: headEmail });
+      if (employee) headOfDepartment = employee._id;
+      else
+        return sendResponse(res, 404, false, "Employee with provided email not found");
     }
 
     const updatedDepartment = await Department.findByIdAndUpdate(
@@ -84,6 +101,7 @@ const updateDepartment = async (req, res) => {
         departmentCode,
         description,
         isActive,
+        headOfDepartment,
       },
       { new: true, runValidators: true }
     );
@@ -94,6 +112,7 @@ const updateDepartment = async (req, res) => {
     return sendResponse(res, 500, false, "Internal server error");
   }
 };
+
 
 const deleteDepartment = async (req, res) => {
   try {
