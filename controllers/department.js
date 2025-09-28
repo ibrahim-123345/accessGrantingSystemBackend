@@ -1,8 +1,16 @@
 const { Department } = require("../models/departments");
+const {Employee} = require("../models/employee"); 
 
 // Helper for consistent API responses
 const sendResponse = (res, status, success, message, data = null) => {
   return res.status(status).json({ success, message, data });
+};
+
+// Populate options for headOfDepartment
+const headPopulate = {
+  path: "headOfDepartment",
+  select:
+    "fullName email phone employeeId jobTitle departmentId department isActive hireDate createdAt updatedAt",
 };
 
 const createDepartment = async (req, res) => {
@@ -35,7 +43,9 @@ const createDepartment = async (req, res) => {
       headOfDepartment, // optional
     });
 
-    const savedDepartment = await newDepartment.save();
+    let savedDepartment = await newDepartment.save();
+    savedDepartment = await savedDepartment.populate(headPopulate);
+
     return sendResponse(res, 201, true, "Department created successfully", savedDepartment);
   } catch (error) {
     console.error("Error creating department:", error);
@@ -45,18 +55,47 @@ const createDepartment = async (req, res) => {
 
 const getAllDepartments = async (req, res) => {
   try {
-    const departments = await Department.find();
-    return sendResponse(res, 200, true, "Departments fetched successfully", departments);
+    // Fetch all departments with head populated
+    const departments = await Department.find().populate(headPopulate);
+
+    // For each department, calculate team size & age
+    const enrichedDepartments = await Promise.all(
+      departments.map(async (dept) => {
+        const teamSize = await Employee.countDocuments({ departmentId: dept._id });
+        const departmentAge =
+          dept.createdAt ? Math.floor((Date.now() - dept.createdAt.getTime()) / (1000 * 60 * 60 * 24)) : null; // in days
+
+        return {
+          ...dept.toObject(),
+          teamSize,
+          departmentAge, // in days
+        };
+      })
+    );
+
+    // Calculate total and avg team size across all departments
+    const overallTotalEmployees = enrichedDepartments.reduce((sum, dept) => sum + dept.teamSize, 0);
+    const avgTeamSize =
+      enrichedDepartments.length > 0 ? overallTotalEmployees / enrichedDepartments.length : 0;
+
+    return sendResponse(res, 200, true, "Departments fetched successfully", {
+      overallTotalEmployees,
+      avgTeamSize,
+      departments: enrichedDepartments,
+    });
   } catch (error) {
     console.error("Error fetching departments:", error);
     return sendResponse(res, 500, false, "Internal server error");
   }
 };
 
+
+
+
 const getDepartmentById = async (req, res) => {
   try {
     const { id } = req.params;
-    const department = await Department.findById(id);
+    const department = await Department.findById(id).populate(headPopulate);
     if (!department) {
       return sendResponse(res, 404, false, "Department not found");
     }
@@ -94,7 +133,7 @@ const updateDepartment = async (req, res) => {
         return sendResponse(res, 404, false, "Employee with provided email not found");
     }
 
-    const updatedDepartment = await Department.findByIdAndUpdate(
+    let updatedDepartment = await Department.findByIdAndUpdate(
       id,
       {
         departmentName,
@@ -104,7 +143,7 @@ const updateDepartment = async (req, res) => {
         headOfDepartment,
       },
       { new: true, runValidators: true }
-    );
+    ).populate(headPopulate);
 
     return sendResponse(res, 200, true, "Department updated successfully", updatedDepartment);
   } catch (error) {
@@ -112,7 +151,6 @@ const updateDepartment = async (req, res) => {
     return sendResponse(res, 500, false, "Internal server error");
   }
 };
-
 
 const deleteDepartment = async (req, res) => {
   try {

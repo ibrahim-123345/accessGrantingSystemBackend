@@ -3,6 +3,11 @@ const { Employee } = require("../models/employee");
 const { SystemsPlatform } = require("../models/systemsPlatform");
 const { Notification } = require("../models/notification");
 const{AccessType}=require("../models/accessTypes");
+const{Authentication}=require("../models/authentication");
+
+const mongoose = require("mongoose");
+
+
 
 
 
@@ -104,7 +109,6 @@ const getAccessRequestsByEmployeeId = async (req, res) => {
       requests
     );
   } catch (error) {
-    console.log("Error fetching access requests by employeeId:", error);
     return sendResponse(res, 500, false, "Internal server error");
   }
 };
@@ -142,7 +146,7 @@ const createAccessRequest = async (req, res) => {
     const sys = await SystemsPlatform.findById(systemId);
     if (!sys) return sendResponse(res, 400, false, "Invalid systemId: system does not exist");
 
-    // Build supervisor details (without renaming anything else)
+    // Build supervisor details
     let supervisorDetails = null;
     if (emp.supervisorId) {
       supervisorDetails = {
@@ -164,6 +168,7 @@ const createAccessRequest = async (req, res) => {
       };
     }
 
+    // 1. Create AccessRequest first
     const newRequest = new AccessRequest({
       employeeId,
       systemId,
@@ -173,18 +178,27 @@ const createAccessRequest = async (req, res) => {
       durationType: durationType || "temporary",
       requestedStartDate: requestedStartDate || null,
       requestedEndDate: requestedEndDate || null,
-      supervisor: supervisorDetails, // ✅ added without touching other fields
+      supervisor: supervisorDetails,
       supervisorApprovals: [],
       grantedPermissionsByIT: []
     });
 
     const savedRequest = await newRequest.save();
 
-    // Notification only if real supervisor exists
+    // 2. Create Notification referencing AccessRequest._id
     if (emp.supervisorId) {
       const newNotification = new Notification({
         recipientId: emp.supervisorId._id,
+        recipient: {
+          fullName: emp.supervisorId.fullName,
+          email: emp.supervisorId.email
+        },
         senderId: employeeId,
+        sender: {
+          fullName: emp.fullName,
+          email: emp.email
+        },
+        relatedAccessRequest: savedRequest._id, // ✅ reference saved request
         type: "supervisor_need_to_approve",
         priority: "high",
         title: "Access Request Approval Needed",
@@ -192,6 +206,7 @@ const createAccessRequest = async (req, res) => {
         relatedSystem: systemId,
         channels: ["email", "inApp"]
       });
+
       await newNotification.save();
     }
 
@@ -207,7 +222,6 @@ const createAccessRequest = async (req, res) => {
     return sendResponse(res, 500, false, "Internal server error");
   }
 };
-
 
 // =============================
 // Update Access Request
@@ -266,19 +280,21 @@ const deleteAccessRequest = async (req, res) => {
   }
 };
 
+
 // =============================
-// Supervisor Approval 
+// Supervisor Approval
 // =============================
 const supervisorApproval = async (req, res) => {
   try {
     const { id } = req.params;
     const { approverId, role, decision, comments } = req.body;
+    console.log("id is : ",id)
 
     if (!approverId || !role || !decision) {
       return sendResponse(res, 400, false, "approverId, role, and decision are required.");
     }
 
-    // Try to update the specific approval entry atomically
+    // Try to update existing approval
     let request = await AccessRequest.findOneAndUpdate(
       {
         _id: id,
@@ -294,6 +310,9 @@ const supervisorApproval = async (req, res) => {
       },
       { new: true }
     );
+
+
+
 
     // If not found, push a new approval entry
     if (!request) {
@@ -318,31 +337,78 @@ const supervisorApproval = async (req, res) => {
       }
     }
 
-    const allApproved = request.supervisorApprovals.length > 0 && request.supervisorApprovals.every(a => a.decision === "approved");
+
+
+    // Update request status
+    const allApproved =
+      request.supervisorApprovals.length > 0 &&
+      request.supervisorApprovals.every(a => a.decision === "approved");
     const anyRejected = request.supervisorApprovals.some(a => a.decision === "rejected");
 
-    if (anyRejected) {
-      request.status = "rejected";
-    } else if (allApproved) {
-      request.status = "supervisor_approved";
-    } else {
-      request.status = "pending";
-    }
+    if (anyRejected) request.status = "rejected";
+    else if (allApproved) request.status = "supervisor_approved";
+    else request.status = "pending";
+
     await request.save();
 
-    const converted = decision.toString().toLowerCase();
+    const converted = decision.toLowerCase();
 
-    const newNotification = new Notification({
-      recipientId: request.employeeId,
+    // Fetch approver info for sender
+    const approver= await Authentication.findOne({employeeId:approverId}).populate("employeeId");
+
+    // =============================
+    // Notification for employee
+    // =============================
+
+    console.log("approver",approver)
+    const employeeNotification = new Notification({
+      recipientId: request.employeeId?._id,
+      recipient: {
+        fullName: request.employeeId?.fullName,
+        email: request.employeeId?.email
+      },
       senderId: approverId,
-      type: decision, 
+      sender: {
+        fullName: approver.employeeId.fullName,
+        email: approver.employeeId.email
+      },
+      relatedAccessRequest: id,
+      type: decision,
       priority: "medium",
       title: "Access Request Update",
-      message: `Your access request has been ${converted} by your supervisor.`,
+      message: `Your access request has been ${converted} by your supervisor, be patient while admin process it`,
       relatedSystem: request.systemId,
       channels: ["email", "inApp"]
     });
-    await newNotification.save();
+    await employeeNotification.save();
+
+    // =============================
+    // Notifications for all admins
+    // =============================
+    const admins = await Authentication.find({ role: "admin", isActive: true }).populate("employeeId");
+    console.log(admins)
+    if (admins && admins.length > 0) {
+      const adminNotifications = admins.map(admin => ({
+        recipientId: admin.employeeId._id,
+        recipient: {
+          fullName: admin.employeeId.fullName,
+          email: admin.employeeId.email
+        },
+        senderId: approverId,
+        sender: {
+          fullName: approver.employeeId.fullName,
+          email: approver.employeeId.email
+        },
+        relatedAccessRequest:id,
+        type: decision,
+        priority: "high",
+        title: "Supervisor Decision Logged",
+        message: `Supervisor has ${converted} an access request for employee ${request.employee.fullName}.`,
+        relatedSystem: request.systemId,
+        channels: ["inApp"]
+      }));
+      await Notification.insertMany(adminNotifications);
+    }
 
     return sendResponse(res, 200, true, "Supervisor approval updated successfully.", request);
   } catch (error) {
@@ -350,8 +416,6 @@ const supervisorApproval = async (req, res) => {
     return sendResponse(res, 500, false, "Internal server error.");
   }
 };
-
-
 
 // =============================
 // IT approval
@@ -652,11 +716,113 @@ const getPopularSystemsPlatforms = async (req, res) => {
 };
 
 
+// ==============================
+// Supervisor Team with Access Request Expiry Info (including supervisor)
+// ==============================
+const getSupervisorTeamWithRequests = async (req, res) => {
+  try {
+    const { id:supervisorId } = req.params;
 
+    if (!supervisorId) {
+      return res.status(400).json({ success: false, message: "SupervisorId is required" });
+    }
 
+    // 1️⃣ Get all active employees under this supervisor
+    const teamMembers = await Employee.find({ 
+      $or: [
+        { supervisorId },           // supervised employees
+        { _id: supervisorId }       // include supervisor himself
+      ],
+      isActive: true
+    });
+    const teamSize = teamMembers.length;
 
+    // 2️⃣ For each member, fetch their access requests
+    const teamData = await Promise.all(
+      teamMembers.map(async (emp) => {
+        const requests = await AccessRequest.find({ employeeId: emp._id });
 
+        // Map requests with expiry info
+        const mappedRequests = requests.map(req => {
+          let remainingTime;
 
+          if (["approved", "active"].includes(req.status)) {
+            if (req.durationType === "temporary" && req.requestedEndDate) {
+              const now = new Date();
+              const diff = req.requestedEndDate - now;
+              remainingTime = diff > 0
+                ? `${Math.ceil(diff / (1000 * 60 * 60 * 24))} days remaining`
+                : "Expired";
+            } else {
+              remainingTime = "Permanent access";
+            }
+          } else {
+            remainingTime = "Not yet approved";
+          }
+
+          return {
+            _id: req._id,
+            system: req.system,
+            justification: req.justification,
+            businessPurpose: req.businessPurpose,
+            urgencyLevel: req.urgencyLevel,
+            durationType: req.durationType,
+            requestedStartDate: req.requestedStartDate,
+            requestedEndDate: req.requestedEndDate,
+            status: req.status,
+            isExpired: req.isExpired,
+            remainingTime,
+            supervisorApprovals: req.supervisorApprovals,
+            grantedPermissionsByIT: req.grantedPermissionsByIT
+          };
+        });
+
+        return {
+          _id: emp._id,
+          fullName: emp.fullName,
+          email: emp.email,
+          jobTitle: emp.jobTitle,
+          department: emp.department,
+          accessRequests: mappedRequests
+        };
+      })
+    );
+
+    // 3️⃣ Summary stats for the team
+    const summaryStats = {
+      totalRequests: 0,
+      pending: 0,
+      supervisor_approved: 0,
+      it_approved: 0,
+      approved: 0,
+      rejected: 0,
+      active: 0,
+      expired: 0,
+      revoked: 0
+    };
+
+    teamData.forEach(emp => {
+      emp.accessRequests.forEach(req => {
+        summaryStats.totalRequests += 1;
+        if (req.status in summaryStats) summaryStats[req.status] += 1;
+      });
+    });
+
+    return res.json({
+      success: true,
+      message: "Supervisor team (including supervisor) with expiry info fetched successfully",
+      data: {
+        teamSize,
+        summaryStats,
+        members: teamData
+      }
+    });
+
+  } catch (err) {
+    console.error("Error fetching supervisor team:", err);
+    return res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
 
 
 // =============================
@@ -674,5 +840,5 @@ module.exports = {
   getStatiticsByAdmin,
   getAccessRequestLimit,
   getPopularSystemsPlatforms,
-  getAccessRequestsByEmployeeId
-};
+  getAccessRequestsByEmployeeId,
+getSupervisorTeamWithRequests};

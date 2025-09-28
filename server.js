@@ -9,8 +9,8 @@ const{createDepartment,deleteDepartment,getDepartmentById,getAllDepartments,upda
 const{createSystemsPlatform,getAllSystemsPlatforms,deleteSystemsPlatform,getSystemsPlatformById,updateSystemsPlatform,getSystemDetails}=require('./controllers/systemsPlatform');
 const{getAccessTypeById,createAccessType,deleteAccessType,getAllAccessTypes,updateAccessType}=require('./controllers/accessTypes');
 const{getAllEmployees,getEmployeeById,createEmployee,updateEmployee,deleteEmployee}=require('./controllers/employee');
-const{createAccessRequest,getAllAccessRequests,getAccessRequestById,updateAccessRequest,deleteAccessRequest,supervisorApproval,itApproval,getStatitics,getStatiticsByAdmin,getAccessRequestsByEmployeeId,getPopularSystemsPlatforms, getAccessRequestLimit}=require('./controllers/accessRequest');
-const{createNotification,deleteNotification,getAllNotifications,getNotificationById,markAsRead,getNotificationsByRecipient}=require('./controllers/notification');
+const{createAccessRequest,getAllAccessRequests,getAccessRequestById,updateAccessRequest,deleteAccessRequest,supervisorApproval,itApproval,getStatitics,getStatiticsByAdmin,getAccessRequestsByEmployeeId,getPopularSystemsPlatforms, getAccessRequestLimit,getSupervisorTeamWithRequests}=require('./controllers/accessRequest');
+const{createNotification,deleteNotification,getNotificationCountsByEmail,getAllNotifications,getNotificationById,markAsRead,getNotificationsByRecipient}=require('./controllers/notification');
 const{login, createUser}=require('./controllers/authentication')
 const { authenticate } = require('./middlewares/auth');
 const { authorize } = require('./middlewares/authorization');
@@ -83,6 +83,8 @@ app.get('/api/statistics/:employeeId', getStatitics);
 app.get('/api/popularSystemsPlatforms', getPopularSystemsPlatforms);
 app.get('/api/getStatisticsByAdmin', getStatiticsByAdmin);
 app.get('/api/accessRequests/employee/:userId', getAccessRequestsByEmployeeId);
+app.get('/api/supervisorDashboard/:id', getSupervisorTeamWithRequests)
+app.put('/api/supervisorApproaval/:id', supervisorApproval)
 
 
 
@@ -93,6 +95,7 @@ app.get('/api/notifications/:id',authenticate, getNotificationById)
 app.patch('/api/notifications/:id/markAsRead', markAsRead)
 app.delete('/api/notifications/:id', deleteNotification)
 app.get('/api/notifications/recipient/:recipientId', getNotificationsByRecipient);
+app.get('/api/notificationByEmail/:email',getNotificationCountsByEmail)
 
 
 

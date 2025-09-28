@@ -120,6 +120,53 @@ const deleteNotification = async (req, res) => {
 
 
 
+// =============================
+// Get Read & Unread Notification Counts by Email
+// =============================
+const getNotificationCountsByEmail = async (req, res) => {
+try {
+const { email } = req.params;
+
+if (!email) {
+  return res.status(400).json({
+    success: false,
+    message: "Recipient email is required",
+  });
+}
+
+// Count unread
+const unreadCount = await Notification.countDocuments({
+  "recipient.email": email,
+  isRead: false,
+});
+
+// Count read
+const readCount = await Notification.countDocuments({
+  "recipient.email": email,
+  isRead: true,
+});
+
+return res.status(200).json({
+  success: true,
+  counts: {
+    unread: unreadCount,
+    read: readCount,
+    total: unreadCount + readCount,
+  },
+});
+
+
+} catch (error) {
+console.error("Error fetching notification counts:", error);
+return res.status(500).json({
+success: false,
+message: "Internal server error",
+});
+}
+};
+
+
+
 
 
 
@@ -169,5 +216,6 @@ module.exports = {
   createNotification,
   markAsRead,
   deleteNotification,
+  getNotificationCountsByEmail,
   getNotificationsByRecipient
 };
