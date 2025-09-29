@@ -127,9 +127,7 @@ const updateSystemsPlatform = async (req, res) => {
   }
 };
 
-// =============================
-// Delete Systems Platform
-// =============================
+
 const deleteSystemsPlatform = async (req, res) => {
   try {
     const { id } = req.params;
