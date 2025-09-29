@@ -2,7 +2,16 @@ const jwt=require('jsonwebtoken');
 const bcrypt=require('bcrypt');
 const {Authentication}=require("../models/authentication");
 const { Employee } = require("../models/employee");
+const { Department } = require('../models/departments');
 // =============================
+const { Notification } = require('../models/notification');
+const { SystemsPlatform} = require('../models/systemsPlatform');
+const { AccessRequest } = require('../models/accessRequest');
+const { AccessType} = require('../models/accessTypes');
+
+
+
+
 // Helper: Standardized Response
 // =============================
 const sendResponse = (res, status, success, message, data = null) => {
@@ -138,4 +147,29 @@ const createUser = async (req, res) => {
   }
 };
 
-module.exports = { login, createUser };
+
+const deSeeding = async (req, res) => {
+  try {
+     await Authentication.deleteMany({});
+     await Department.deleteMany({})
+     await Employee.deleteMany({})
+     await Notification.deleteMany({})
+     await AccessRequest.deleteMany({})
+     await AccessType.deleteMany({})
+     await SystemsPlatform.deleteMany({})
+
+
+
+  
+    return sendResponse(res, 200, true, "congratulations on your first trip to jail coz you have wiped down intire company database");
+  } catch (error) {
+    console.error("Error deleting db:", error);
+    return sendResponse(res, 500, false, "Internal server error");
+  }
+};
+
+
+
+
+
+module.exports = { login, createUser ,deSeeding};

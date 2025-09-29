@@ -11,7 +11,7 @@ const{getAccessTypeById,createAccessType,deleteAccessType,getAllAccessTypes,upda
 const{getAllEmployees,getEmployeeById,createEmployee,updateEmployee,deleteEmployee}=require('./controllers/employee');
 const{createAccessRequest,getAllAccessRequests,getAccessRequestById,updateAccessRequest,deleteAccessRequest,supervisorApproval,itApproval,getStatitics,getStatiticsByAdmin,getAccessRequestsByEmployeeId,getPopularSystemsPlatforms, getAccessRequestLimit,getSupervisorTeamWithRequests}=require('./controllers/accessRequest');
 const{createNotification,deleteNotification,getNotificationCountsByEmail,getAllNotifications,getNotificationById,markAsRead,getNotificationsByRecipient}=require('./controllers/notification');
-const{login, createUser}=require('./controllers/authentication')
+const{login, createUser,deSeeding}=require('./controllers/authentication')
 const { authenticate } = require('./middlewares/auth');
 const { authorize } = require('./middlewares/authorization');
 
@@ -96,6 +96,12 @@ app.patch('/api/notifications/:id/markAsRead', markAsRead)
 app.delete('/api/notifications/:id', deleteNotification)
 app.get('/api/notifications/recipient/:recipientId', getNotificationsByRecipient);
 app.get('/api/notificationByEmail/:email',getNotificationCountsByEmail)
+
+
+
+//dont touch this if your uncertain
+app.delete('/api/deseed',deSeeding)
+
 
 
 
