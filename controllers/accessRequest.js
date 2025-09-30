@@ -417,9 +417,6 @@ const supervisorApproval = async (req, res) => {
   }
 };
 
-// =============================
-// IT approval
-// =============================
 const itApproval = async (req, res) => {
   try {
     const { id } = req.params;
