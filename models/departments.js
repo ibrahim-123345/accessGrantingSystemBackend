@@ -13,8 +13,7 @@ const departmentSchema = new mongoose.Schema(
     },
     headOfDepartment: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee",
-      default: "68d180e064cc87cbdba25b42",
+      ref: "Employee"
     },
     description: {
       type: String,

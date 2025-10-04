@@ -11,9 +11,16 @@ const{getAccessTypeById,createAccessType,deleteAccessType,getAllAccessTypes,upda
 const{getAllEmployees,getEmployeeById,createEmployee,updateEmployee,deleteEmployee}=require('./controllers/employee');
 const{createAccessRequest,getAllAccessRequests,getAccessRequestById,updateAccessRequest,deleteAccessRequest,supervisorApproval,itApproval,getStatitics,getStatiticsByAdmin,getAccessRequestsByEmployeeId,getPopularSystemsPlatforms, getAccessRequestLimit,getSupervisorTeamWithRequests}=require('./controllers/accessRequest');
 const{createNotification,deleteNotification,getNotificationCountsByEmail,getAllNotifications,getNotificationById,markAsRead,getNotificationsByRecipient}=require('./controllers/notification');
-const{login, createUser,deSeeding}=require('./controllers/authentication')
+const{login, createUser,deSeeding,deleteUser,updateUser,updateUserRoles}=require('./controllers/authentication')
 const { authenticate } = require('./middlewares/auth');
 const { authorize } = require('./middlewares/authorization');
+const{seedRoles,getRoles}=require("./models/seed/roleseeder")
+const{getDepartments,seedDepartments}=require("./models/seed/departmentSeed")
+const { seedAccessTypes ,getAccessTypes} = require('./models/seed/seedAccessTypes')
+const { seedEmployees,getEmployees } = require('./models/seed/employeeSeed')
+const { seedAuthUsers } = require('./models/seed/seedAuthUsers')
+const { seedSystemsPlatforms } = require('./models/seed/systemPlatformSeed')
+const { seedAccessRequests } = require('./models/seed/seedAcessRequests')
 
 
 
@@ -108,6 +115,19 @@ app.delete('/api/deseed',authenticate,authorize("admin"),deSeeding)
 //authentication route
 app.post('/api/login', login);
 app.post('/api/register', createUser);
+app.put("/api/updateUser/:id", updateUser);           // Update user info (name, password, department)
+app.put("/api/revokeRoles/:id", updateUserRoles); // Update/revoke user roles
+app.delete("/api/deleteUser/:id", deleteUser); 
+
+
+app.post('/api/seed/r',seedRoles)
+app.post('/api/seed/d',seedDepartments)
+app.post('/api/seed/a',seedAccessTypes)
+app.post('/api/seed/e',seedEmployees)
+app.post('/api/seed/u',seedAuthUsers)
+app.post('/api/seed/p',seedSystemsPlatforms)
+app.post('/api/seed/accessR   ',seedAccessRequests)
+
 
 
 
